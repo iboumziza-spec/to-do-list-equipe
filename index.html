@@ -310,6 +310,7 @@ function toggleTask(id) {
 }
 
 function removeTask(id) {
+  if (id.indexOf('tr_') === 0) { toast("🔒 Les cas de test ne peuvent pas être supprimés"); return; }
   if (!confirm("Supprimer cette tâche ?")) return;
   db.ref("tasks/" + id).remove();
   toast("🗑️ Supprimée");
@@ -599,9 +600,10 @@ function render() {
     }
 
     h += '</div>';
+    var isTestCase = t._id.indexOf('tr_') === 0;
     h += '<div style="display:flex;gap:4px;flex-shrink:0;margin-top:2px">';
     h += '<button class="btn-edit" onclick="toggleComments(\'' + t._id + '\')">💬</button>';
-    h += '<button class="btn-del" onclick="removeTask(\'' + t._id + '\')">✕</button>';
+    if (!isTestCase) h += '<button class="btn-del" onclick="removeTask(\'' + t._id + '\')">✕</button>';
     h += '</div></div>';
 
     if (commOpen) {
