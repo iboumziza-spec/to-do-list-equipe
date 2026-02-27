@@ -76,6 +76,13 @@ button:hover{opacity:.85}
 .btn-logout{padding:5px 10px;background:#334155;color:#94a3b8;font-size:11px;border-radius:8px}
 .online-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px}
 .loading{text-align:center;color:#94a3b8;padding:60px;font-size:16px}
+.bulk-bar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.btn-bulk{padding:6px 14px;font-size:11px;border-radius:8px;color:#fff}
+.bulk-info{color:#94a3b8;font-size:11px}
+.pagination{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0}
+.pagination button{padding:6px 14px;background:#334155;color:#94a3b8;font-size:12px;border-radius:8px}
+.pagination button:disabled{opacity:.3;cursor:not-allowed}
+.pagination span{color:#94a3b8;font-size:12px}
 </style>
 </head>
 <body>
@@ -110,11 +117,13 @@ var state = {
   commentOpenId: null,
   showNewCat: false,
   loginMode: "login",
-  loginErr: ""
+  loginErr: "",
+  page: 0
 };
 
 var PRIORITIES = { high: "🔴 Haute", medium: "🟡 Moyenne", low: "🟢 Basse" };
 var FILTERS = ["Toutes", "À faire", "Terminées"];
+var PAGE_SIZE = 50;
 
 // ========== AUTH ==========
 auth.onAuthStateChanged(function(u) {
@@ -189,6 +198,7 @@ function listenData() {
 
 // ========== HELPERS ==========
 function esc(s) { var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+function escQuote(s) { return esc(s).replace(/'/g, "&#39;"); }
 function isOverdue(t) { return t.dueDate && !t.done && new Date(t.dueDate) < new Date(new Date().toDateString()); }
 function isDueSoon(t) { if (!t.dueDate || t.done) return false; var d = (new Date(t.dueDate) - new Date(new Date().toDateString())) / 86400000; return d >= 0 && d <= 2; }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : ""; }
@@ -276,10 +286,55 @@ function addComment(taskId) {
   toast("💬 Commentaire ajouté");
 }
 
-function setFilter(f) { state.filter = f; render(); }
-function setCatFilter(c) { state.catFilter = c; render(); }
-function setPersonFilter(p) { state.personFilter = p; render(); }
+function setFilter(f) { state.filter = f; state.page = 0; render(); }
+function setCatFilter(c) { state.catFilter = c; state.page = 0; render(); }
+function setPersonFilter(p) { state.personFilter = p; state.page = 0; render(); }
 function setLoginMode(m) { state.loginMode = m; state.loginErr = ""; render(); }
+function goPage(p) { state.page = p; render(); window.scrollTo(0, 0); }
+
+function selectAll() {
+  var taskArr = [];
+  for (var k in state.tasks) { var t = state.tasks[k]; t._id = k; taskArr.push(t); }
+  var toUpdate = [];
+  for (var i = 0; i < taskArr.length; i++) {
+    var t = taskArr[i];
+    var pF = state.filter === "Toutes" || (state.filter === "À faire" && !t.done) || (state.filter === "Terminées" && t.done);
+    var pC = state.catFilter === "Toutes" || t.category === state.catFilter;
+    var pP = state.personFilter === "Toutes" || t.assignee === state.personFilter || t.createdBy === state.personFilter;
+    if (pF && pC && pP && !t.done) toUpdate.push(t._id);
+  }
+  if (toUpdate.length === 0) { toast("Aucune tâche à cocher"); return; }
+  var updates = {};
+  for (var i = 0; i < toUpdate.length; i++) {
+    updates[toUpdate[i] + "/done"] = true;
+    updates[toUpdate[i] + "/completedBy"] = state.user.uid;
+    updates[toUpdate[i] + "/completedAt"] = new Date().toISOString();
+  }
+  db.ref("tasks").update(updates);
+  toast("✅ " + toUpdate.length + " tâches cochées");
+}
+
+function deselectAll() {
+  var taskArr = [];
+  for (var k in state.tasks) { var t = state.tasks[k]; t._id = k; taskArr.push(t); }
+  var toUpdate = [];
+  for (var i = 0; i < taskArr.length; i++) {
+    var t = taskArr[i];
+    var pF = state.filter === "Toutes" || (state.filter === "À faire" && !t.done) || (state.filter === "Terminées" && t.done);
+    var pC = state.catFilter === "Toutes" || t.category === state.catFilter;
+    var pP = state.personFilter === "Toutes" || t.assignee === state.personFilter || t.createdBy === state.personFilter;
+    if (pF && pC && pP && t.done) toUpdate.push(t._id);
+  }
+  if (toUpdate.length === 0) { toast("Aucune tâche à décocher"); return; }
+  var updates = {};
+  for (var i = 0; i < toUpdate.length; i++) {
+    updates[toUpdate[i] + "/done"] = false;
+    updates[toUpdate[i] + "/completedBy"] = null;
+    updates[toUpdate[i] + "/completedAt"] = null;
+  }
+  db.ref("tasks").update(updates);
+  toast("↩️ " + toUpdate.length + " tâches décochées");
+}
 
 // ========== RENDER ==========
 function render() {
@@ -360,7 +415,7 @@ function render() {
   h += '</div>';
 
   h += '<div class="cat-filters">';
-  for (var i = 0; i < usedCats.length; i++) h += '<button class="btn-cat ' + (state.catFilter === usedCats[i] ? 'active' : '') + '" onclick="setCatFilter(\'' + esc(usedCats[i]) + '\')">' + esc(usedCats[i]) + '</button>';
+  for (var i = 0; i < usedCats.length; i++) h += '<button class="btn-cat ' + (state.catFilter === usedCats[i] ? 'active' : '') + '" onclick="setCatFilter(\'' + escQuote(usedCats[i]) + '\')">' + esc(usedCats[i]) + '</button>';
   h += '</div>';
 
   h += '<div class="person-filters">';
@@ -371,11 +426,42 @@ function render() {
   }
   h += '</div>';
 
+  // Bulk actions
+  var filteredDone = 0;
+  for (var i = 0; i < filtered.length; i++) { if (filtered[i].done) filteredDone++; }
+  var filteredNotDone = filtered.length - filteredDone;
+
+  if (filtered.length > 0) {
+    h += '<div class="bulk-bar">';
+    if (filteredNotDone > 0) h += '<button class="btn-bulk" style="background:#22c55e" onclick="selectAll()">✅ Tout sélectionner (' + filteredNotDone + ')</button>';
+    if (filteredDone > 0) h += '<button class="btn-bulk" style="background:#f59e0b" onclick="deselectAll()">↩️ Tout désélectionner (' + filteredDone + ')</button>';
+    h += '<span class="bulk-info">' + filtered.length + ' tâches affichées</span>';
+    h += '</div>';
+  }
+
+  // Pagination
+  var totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (state.page >= totalPages) state.page = totalPages - 1;
+  if (state.page < 0) state.page = 0;
+  var pageStart = state.page * PAGE_SIZE;
+  var pageEnd = Math.min(pageStart + PAGE_SIZE, filtered.length);
+  var paged = filtered.slice(pageStart, pageEnd);
+
+  if (filtered.length > PAGE_SIZE) {
+    h += '<div class="pagination">';
+    h += '<button ' + (state.page === 0 ? 'disabled' : '') + ' onclick="goPage(0)">&laquo;</button>';
+    h += '<button ' + (state.page === 0 ? 'disabled' : '') + ' onclick="goPage(' + (state.page - 1) + ')">&lsaquo; Préc.</button>';
+    h += '<span>Page ' + (state.page + 1) + ' / ' + totalPages + '</span>';
+    h += '<button ' + (state.page >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (state.page + 1) + ')">Suiv. &rsaquo;</button>';
+    h += '<button ' + (state.page >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (totalPages - 1) + ')">&raquo;</button>';
+    h += '</div>';
+  }
+
   // Tasks
   if (filtered.length === 0) h += '<div class="empty">Aucune tâche pour ces filtres 🔍</div>';
 
-  for (var i = 0; i < filtered.length; i++) {
-    var t = filtered[i];
+  for (var i = 0; i < paged.length; i++) {
+    var t = paged[i];
     var od = isOverdue(t), ds = isDueSoon(t);
     var isEdit = state.editId === t._id;
     var commOpen = state.commentOpenId === t._id;
@@ -433,6 +519,17 @@ function render() {
       h += '<button class="btn-sm" style="background:#3b82f6" onclick="addComment(\'' + t._id + '\')">Envoyer</button>';
       h += '</div></div>';
     }
+    h += '</div>';
+  }
+
+  // Pagination bas
+  if (filtered.length > PAGE_SIZE) {
+    h += '<div class="pagination">';
+    h += '<button ' + (state.page === 0 ? 'disabled' : '') + ' onclick="goPage(0)">&laquo;</button>';
+    h += '<button ' + (state.page === 0 ? 'disabled' : '') + ' onclick="goPage(' + (state.page - 1) + ')">&lsaquo; Préc.</button>';
+    h += '<span>Page ' + (state.page + 1) + ' / ' + totalPages + '</span>';
+    h += '<button ' + (state.page >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (state.page + 1) + ')">Suiv. &rsaquo;</button>';
+    h += '<button ' + (state.page >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (totalPages - 1) + ')">&raquo;</button>';
     h += '</div>';
   }
 
