@@ -38,15 +38,15 @@ button:hover{opacity:.85}
 .btn-person.active{background:#f59e0b;color:#fff}
 .btn-person:not(.active){background:#0f172a;color:#64748b}
 .task{border-radius:14px;border:1px solid #334155;margin-bottom:8px;overflow:hidden;transition:all .3s}
-.task.done{opacity:.5;background:#0f172a}
+.task.done{opacity:1;background:#1e293b;border-color:#22c55e55}
 .task:not(.done){background:#1e293b}
 .task.overdue{border-color:#ef444466}
 .task-main{display:flex;align-items:flex-start;gap:10px;padding:12px 14px}
 .check{width:22px;height:22px;border-radius:7px;border:2px solid #475569;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;user-select:none}
-.check.checked{border-color:#22c55e;background:#22c55e22}
+.check.checked{border-color:#22c55e;background:#22c55e;color:#fff}
 .task-body{flex:1;min-width:0}
 .task-title{font-size:13px;word-break:break-word}
-.task-title.crossed{text-decoration:line-through}
+.task-title.crossed{text-decoration:none}
 .task-meta{display:flex;gap:6px;margin-top:5px;font-size:10px;color:#64748b;flex-wrap:wrap;align-items:center}
 .badge-cat{background:#8b5cf622;color:#a78bfa;padding:1px 7px;border-radius:6px;font-weight:600}
 .badge-person{background:#3b82f622;color:#60a5fa;padding:1px 7px;border-radius:6px}
@@ -358,7 +358,7 @@ function render() {
   }
 
   var po = { high: 0, medium: 1, low: 2 };
-  filtered.sort(function(a, b) { return (a.done ? 1 : 0) - (b.done ? 1 : 0) || po[a.priority] - po[b.priority]; });
+  filtered.sort(function(a, b) { return po[a.priority] - po[b.priority]; });
 
   var catSet = {};
   for (var i = 0; i < taskArr.length; i++) catSet[taskArr[i].category] = true;
