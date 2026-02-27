@@ -496,7 +496,7 @@ function render() {
       h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="' + (isActive ? 'background:#8b5cf6;color:#fff' : 'background:var(--bg-inactive);color:var(--color-inactive)') + '" onclick="setCatFilter(\'Toutes\')">Toutes</button>';
     } else {
       var cc = getCatColor(catName);
-      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="background:' + (isActive ? cc : cc + '33') + ';color:' + (isActive ? '#4a3728' : '#4a3728') + '" onclick="setCatFilter(\'' + escQuote(catName) + '\')">' + esc(catName) + '</button>';
+      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="background:' + cc + ';color:#4a3728;' + (isActive ? 'box-shadow:0 0 0 2px #4a3728;font-weight:700' : 'opacity:.7') + '" onclick="setCatFilter(\'' + escQuote(catName) + '\')">' + esc(catName) + '</button>';
     }
   }
   h += '</div>';
@@ -577,7 +577,7 @@ function render() {
       h += '<span class="task-title ' + (t.done ? 'crossed' : '') + '">' + esc(t.text) + '</span>';
       h += '<div class="task-meta">';
       var tc = getCatColor(t.category);
-      h += '<span class="badge-cat" style="background:' + tc + '44;color:#4a3728">' + esc(t.category) + '</span>';
+      h += '<span class="badge-cat" style="background:' + tc + ';color:#4a3728">' + esc(t.category) + '</span>';
       h += '<span>' + PRIORITIES[t.priority] + '</span>';
       if (t.assignee) h += '<span class="badge-person">👤 ' + esc(getUserName(t.assignee)) + '</span>';
       if (t.dueDate) h += '<span class="badge-date ' + (od ? 'overdue' : ds ? 'soon' : '') + '">📅 ' + fmtDate(t.dueDate) + (od ? ' ⚠️' : '') + '</span>';
