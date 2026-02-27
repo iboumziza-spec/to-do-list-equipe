@@ -433,7 +433,14 @@ function render() {
   filtered.sort(function(a, b) { return po[a.priority] - po[b.priority]; });
 
   var catSet = {};
-  for (var i = 0; i < taskArr.length; i++) catSet[taskArr[i].category] = true;
+  var catStats = {};
+  for (var i = 0; i < taskArr.length; i++) {
+    var cat = taskArr[i].category;
+    catSet[cat] = true;
+    if (!catStats[cat]) catStats[cat] = { total: 0, done: 0 };
+    catStats[cat].total++;
+    if (taskArr[i].done) catStats[cat].done++;
+  }
   var usedCats = ["Toutes"];
   for (var c in catSet) usedCats.push(c);
 
@@ -496,7 +503,11 @@ function render() {
       h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="' + (isActive ? 'background:#8b5cf6;color:#fff' : 'background:var(--bg-inactive);color:var(--color-inactive)') + '" onclick="setCatFilter(\'Toutes\')">Toutes</button>';
     } else {
       var cc = getCatColor(catName);
-      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="background:' + cc + ';color:#4a3728;' + (isActive ? 'box-shadow:0 0 0 2px #4a3728;font-weight:700' : 'opacity:.7') + '" onclick="setCatFilter(\'' + escQuote(catName) + '\')">' + esc(catName) + '</button>';
+      var cs = catStats[catName];
+      var allDone = cs && cs.total > 0 && cs.done === cs.total;
+      var bgColor = allDone ? '#22c55e' : cc;
+      var txtColor = allDone ? '#fff' : '#4a3728';
+      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="background:' + bgColor + ';color:' + txtColor + ';' + (isActive ? 'box-shadow:0 0 0 2px #4a3728;font-weight:700' : 'opacity:.7') + '" onclick="setCatFilter(\'' + escQuote(catName) + '\')">' + esc(catName) + (allDone ? ' ✓' : '') + '</button>';
     }
   }
   h += '</div>';
