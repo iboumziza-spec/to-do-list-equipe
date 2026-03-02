@@ -128,6 +128,24 @@ button:hover{opacity:.85}
 .pagination button:disabled{opacity:.3;cursor:not-allowed}
 .pagination span{color:var(--color-muted2);font-size:12px}
 .btn-dark-toggle{padding:4px 10px;background:var(--bg-btn-secondary);color:var(--color-btn-secondary);font-size:16px;border-radius:8px;line-height:1}
+.view-tabs{display:flex;gap:6px;margin-bottom:14px}
+.btn-view{flex:1;padding:10px 0;font-size:13px;font-weight:600;border-radius:10px;text-align:center}
+.btn-view.active{background:#3b82f6;color:#fff}
+.btn-view:not(.active){background:var(--bg-inactive);color:var(--color-inactive)}
+.spec-card{border-radius:14px;border:1px solid var(--border-task);margin-bottom:8px;padding:14px;display:flex;align-items:flex-start;gap:10px;box-shadow:var(--shadow);transition:all .3s}
+.spec-card.en-cours{background:#fff7ed;border-color:#fb923c55}
+.spec-card.finalisee{background:#f0fdf4;border-color:#22c55e55}
+body.dark .spec-card.en-cours{background:#431407;border-color:#fb923c44}
+body.dark .spec-card.finalisee{background:#052e16;border-color:#22c55e44}
+.spec-body{flex:1;min-width:0}
+.spec-name{font-size:13px;font-weight:600;word-break:break-word}
+.spec-meta{display:flex;gap:6px;margin-top:5px;font-size:10px;color:var(--color-inactive);flex-wrap:wrap;align-items:center}
+.spec-status{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600}
+.spec-status.en-cours{background:#f59e0b;color:#fff}
+.spec-status.finalisee{background:#22c55e;color:#fff}
+.spec-notes{font-size:11px;color:var(--color-muted);margin-top:4px;font-style:italic}
+.spec-actions{display:flex;gap:4px;flex-shrink:0}
+.spec-stats{color:var(--color-muted2);font-size:13px;margin-bottom:14px}
 </style>
 </head>
 <body>
@@ -168,7 +186,10 @@ var state = {
   showNewCat: false,
   loginMode: "login",
   loginErr: "",
-  page: 0
+  page: 0,
+  view: "tasks",
+  specs: {},
+  specModuleFilter: "Tous"
 };
 
 var PRIORITIES = { high: "🔴 Haute", medium: "🟡 Moyenne", low: "🟢 Basse" };
@@ -264,6 +285,10 @@ function listenData() {
   db.ref("categories").on("value", function(snap) {
     var c = snap.val();
     if (c && c.length) state.categories = c;
+    render();
+  });
+  db.ref("specs").on("value", function(snap) {
+    state.specs = snap.val() || {};
     render();
   });
 }
@@ -364,6 +389,44 @@ function setCatFilter(c) { state.catFilter = c; state.page = 0; render(); }
 function setPersonFilter(p) { state.personFilter = p; state.page = 0; render(); }
 function setLoginMode(m) { state.loginMode = m; state.loginErr = ""; render(); }
 function goPage(p) { state.page = p; render(); window.scrollTo(0, 0); }
+
+function setView(v) { state.view = v; render(); }
+function setSpecModuleFilter(m) { state.specModuleFilter = m; render(); }
+
+function addSpec() {
+  var nameEl = document.getElementById("specName");
+  var modEl = document.getElementById("specModule");
+  var notesEl = document.getElementById("specNotes");
+  if (!nameEl || !nameEl.value.trim()) return;
+  if (!modEl || !modEl.value.trim()) return;
+  var key = db.ref("specs").push().key;
+  db.ref("specs/" + key).set({
+    name: nameEl.value.trim(),
+    module: modEl.value.trim(),
+    notes: (notesEl && notesEl.value.trim()) ? notesEl.value.trim() : null,
+    status: "en_cours",
+    createdBy: state.user.uid,
+    createdAt: new Date().toISOString(),
+    finalizedAt: null
+  });
+  toast("📝 Spec ajoutée");
+}
+
+function toggleSpecStatus(id) {
+  var s = state.specs[id];
+  if (!s) return;
+  var newStatus = s.status === "en_cours" ? "finalisee" : "en_cours";
+  var updates = { status: newStatus };
+  updates.finalizedAt = newStatus === "finalisee" ? new Date().toISOString() : null;
+  db.ref("specs/" + id).update(updates);
+  toast(newStatus === "finalisee" ? "✅ Spec finalisée" : "↩️ Spec remise en cours");
+}
+
+function removeSpec(id) {
+  if (!confirm("Supprimer cette spec ?")) return;
+  db.ref("specs/" + id).remove();
+  toast("🗑️ Spec supprimée");
+}
 
 function selectAll() {
   var taskArr = [];
@@ -471,6 +534,18 @@ function render() {
   if (overdueCount > 0) h += '<span class="overdue">⚠️ ' + overdueCount + ' en retard</span>';
   h += '</div>';
   h += '<div class="bar-bg"><div class="bar-fill" style="width:' + pct + '%;background:' + (pct === 100 ? '#22c55e' : '#3b82f6') + '"></div></div>';
+
+  // View tabs
+  h += '<div class="view-tabs">';
+  h += '<button class="btn-view ' + (state.view === 'tasks' ? 'active' : '') + '" onclick="setView(\'tasks\')">📋 Tâches</button>';
+  h += '<button class="btn-view ' + (state.view === 'specs' ? 'active' : '') + '" onclick="setView(\'specs\')">📝 Specs en cours</button>';
+  h += '</div>';
+
+  if (state.view === "specs") {
+    h += renderSpecs();
+    app.innerHTML = h;
+    return;
+  }
 
   // Add task
   h += '<div class="panel"><div class="row">';
@@ -632,6 +707,98 @@ function render() {
   }
 
   app.innerHTML = h;
+}
+
+function renderSpecs() {
+  var h = '';
+
+  // Add spec panel
+  h += '<div class="panel"><div class="row">';
+  h += '<input id="specName" class="inp-flex" placeholder="Nom de la spec (ex: CU0521 - Gestion des profils)..." onkeydown="if(event.key===\'Enter\')addSpec()">';
+  h += '<button class="btn-add" onclick="addSpec()">+</button></div>';
+  h += '<div class="row">';
+  h += '<input id="specModule" placeholder="Module..." style="flex:1;min-width:120px">';
+  h += '<input id="specNotes" class="inp-flex" placeholder="Notes (optionnel)...">';
+  h += '</div></div>';
+
+  // Collect specs
+  var specArr = [];
+  for (var k in state.specs) { var s = state.specs[k]; s._id = k; specArr.push(s); }
+
+  // Count stats
+  var enCours = 0, finalisees = 0;
+  for (var i = 0; i < specArr.length; i++) {
+    if (specArr[i].status === "finalisee") finalisees++;
+    else enCours++;
+  }
+
+  h += '<div class="spec-stats">📊 ' + enCours + ' en cours / ' + finalisees + ' finalisée' + (finalisees > 1 ? 's' : '') + '</div>';
+
+  // Module filters
+  var moduleSet = {};
+  for (var i = 0; i < specArr.length; i++) moduleSet[specArr[i].module] = true;
+  var modules = ["Tous"];
+  for (var m in moduleSet) modules.push(m);
+
+  h += '<div class="cat-filters">';
+  for (var i = 0; i < modules.length; i++) {
+    var m = modules[i];
+    var isActive = state.specModuleFilter === m;
+    if (m === "Tous") {
+      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="' + (isActive ? 'background:#8b5cf6;color:#fff' : 'background:var(--bg-inactive);color:var(--color-inactive)') + '" onclick="setSpecModuleFilter(\'Tous\')">Tous</button>';
+    } else {
+      var mc = getCatColor(m);
+      h += '<button class="btn-cat ' + (isActive ? 'active' : '') + '" style="background:' + mc + ';color:#4a3728;' + (isActive ? 'box-shadow:0 0 0 2px #4a3728;font-weight:700' : 'opacity:.7') + '" onclick="setSpecModuleFilter(\'' + escQuote(m) + '\')">' + esc(m) + '</button>';
+    }
+  }
+  h += '</div>';
+
+  // Filter specs
+  var filtered = [];
+  for (var i = 0; i < specArr.length; i++) {
+    if (state.specModuleFilter === "Tous" || specArr[i].module === state.specModuleFilter) filtered.push(specArr[i]);
+  }
+
+  // Sort: en_cours first, then by createdAt desc
+  filtered.sort(function(a, b) {
+    if (a.status !== b.status) return a.status === "en_cours" ? -1 : 1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if (filtered.length === 0) {
+    h += '<div class="empty">Aucune spec pour ces filtres 🔍</div>';
+  }
+
+  for (var i = 0; i < filtered.length; i++) {
+    var s = filtered[i];
+    var statusClass = s.status === "finalisee" ? "finalisee" : "en-cours";
+    var statusLabel = s.status === "finalisee" ? "Finalisée" : "En cours";
+    var mc = getCatColor(s.module);
+
+    h += '<div class="spec-card ' + statusClass + '" style="border-left:4px solid ' + mc + '">';
+    h += '<div class="spec-body">';
+    h += '<div class="spec-name">' + esc(s.name) + '</div>';
+    h += '<div class="spec-meta">';
+    h += '<span class="spec-status ' + statusClass + '">' + statusLabel + '</span>';
+    h += '<span class="badge-cat" style="background:' + mc + ';color:#4a3728">' + esc(s.module) + '</span>';
+    h += '<span>par ' + esc(getUserName(s.createdBy)) + '</span>';
+    h += '<span>📅 ' + fmtDate(s.createdAt) + '</span>';
+    if (s.status === "finalisee" && s.finalizedAt) h += '<span style="color:#22c55e">✓ ' + fmtDate(s.finalizedAt) + '</span>';
+    h += '</div>';
+    if (s.notes) h += '<div class="spec-notes">' + esc(s.notes) + '</div>';
+    if (s.status === "finalisee") h += '<div style="margin-top:4px;font-size:10px;color:#f59e0b;font-weight:600">⚠️ Penser à créer les cas de test</div>';
+    h += '</div>';
+    h += '<div class="spec-actions">';
+    if (s.status === "en_cours") {
+      h += '<button class="btn-sm" style="background:#22c55e" onclick="toggleSpecStatus(\'' + s._id + '\')">✓ Finaliser</button>';
+    } else {
+      h += '<button class="btn-sm" style="background:#f59e0b" onclick="toggleSpecStatus(\'' + s._id + '\')">↩️ En cours</button>';
+    }
+    h += '<button class="btn-del" onclick="removeSpec(\'' + s._id + '\')">✕</button>';
+    h += '</div></div>';
+  }
+
+  return h;
 }
 
 function renderLogin(app) {
