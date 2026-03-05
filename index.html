@@ -189,7 +189,9 @@ var state = {
   page: 0,
   view: "tasks",
   specs: {},
-  specModuleFilter: "Tous"
+  specModuleFilter: "Tous",
+  searchQuery: "",
+  _searchFocus: false
 };
 
 var PRIORITIES = { high: "🔴 Haute", medium: "🟡 Moyenne", low: "🟢 Basse" };
@@ -392,6 +394,7 @@ function goPage(p) { state.page = p; render(); window.scrollTo(0, 0); }
 
 function setView(v) { state.view = v; render(); }
 function setSpecModuleFilter(m) { state.specModuleFilter = m; render(); }
+function setSearch(q) { state.searchQuery = q; state.page = 0; state._searchFocus = true; render(); }
 
 function addSpec() {
   var nameEl = document.getElementById("specName");
@@ -490,7 +493,8 @@ function render() {
     var pF = state.filter === "Toutes" || (state.filter === "À faire" && !t.done) || (state.filter === "Terminées" && t.done);
     var pC = state.catFilter === "Toutes" || t.category === state.catFilter;
     var pP = state.personFilter === "Toutes" || t.assignee === state.personFilter || t.createdBy === state.personFilter;
-    if (pF && pC && pP) filtered.push(t);
+    var pS = !state.searchQuery || t.text.toLowerCase().indexOf(state.searchQuery.toLowerCase()) !== -1;
+    if (pF && pC && pP && pS) filtered.push(t);
   }
 
   var po = { high: 0, medium: 1, low: 2 };
@@ -594,6 +598,12 @@ function render() {
     var label = p === "Toutes" ? "👥 Tous" : getUserName(p);
     h += '<button class="btn-person ' + (state.personFilter === p ? 'active' : '') + '" onclick="setPersonFilter(\'' + p + '\')">' + esc(label) + '</button>';
   }
+  h += '</div>';
+
+  // Search
+  h += '<div class="row" style="margin-bottom:12px">';
+  h += '<input id="taskSearch" class="inp-flex" placeholder="🔍 Rechercher une tâche par titre..." value="' + esc(state.searchQuery) + '" oninput="setSearch(this.value)">';
+  if (state.searchQuery) h += '<button onclick="setSearch(\'\')" style="padding:6px 10px;background:var(--bg-btn-secondary);color:var(--color-btn-secondary);font-size:11px;border-radius:8px">✕ Effacer</button>';
   h += '</div>';
 
   // Bulk actions
@@ -707,6 +717,11 @@ function render() {
   }
 
   app.innerHTML = h;
+  if (state._searchFocus) {
+    state._searchFocus = false;
+    var si = document.getElementById("taskSearch");
+    if (si) { si.focus(); var l = si.value.length; si.setSelectionRange(l, l); }
+  }
 }
 
 function renderSpecs() {
