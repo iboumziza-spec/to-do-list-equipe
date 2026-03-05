@@ -326,6 +326,7 @@ function addTask() {
     createdAt: new Date().toISOString(),
     comments: {}
   });
+  state.searchQuery = "";
   toast("✅ Tâche ajoutée");
 }
 
@@ -493,7 +494,7 @@ function render() {
     var pF = state.filter === "Toutes" || (state.filter === "À faire" && !t.done) || (state.filter === "Terminées" && t.done);
     var pC = state.catFilter === "Toutes" || t.category === state.catFilter;
     var pP = state.personFilter === "Toutes" || t.assignee === state.personFilter || t.createdBy === state.personFilter;
-    var pS = !state.searchQuery || t.text.toLowerCase().indexOf(state.searchQuery.toLowerCase()) !== -1;
+    var pS = !state.searchQuery || ((t.text || "").toLowerCase().indexOf(state.searchQuery.toLowerCase()) !== -1);
     if (pF && pC && pP && pS) filtered.push(t);
   }
 
